@@ -5,6 +5,12 @@ All notable changes to **Forecast Point** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Documentation
+
+- README: GitHub Release download section and APK naming guidance
+
 ## [1.0.0] — 2026-08-06
 
 Initial public release under the name **Forecast Point**
