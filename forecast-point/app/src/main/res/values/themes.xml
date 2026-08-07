@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ForecastPoint" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF0288D1</item>
+        <item name="android:navigationBarColor">#FF1B262C</item>
+        <item name="android:windowBackground">#FF1B262C</item>
+        <item name="android:colorPrimary">#FF0288D1</item>
+    </style>
+</resources>

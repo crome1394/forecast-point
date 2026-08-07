@@ -1,0 +1,454 @@
+package com.crome.forecastpoint.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.crome.forecastpoint.data.HourlyRow
+import com.crome.forecastpoint.data.TideInfo
+import com.crome.forecastpoint.ui.theme.PrimaryBlue
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+private enum class HourlyTab(val title: String) {
+    Temperature("TEMPERATURE"),
+    Precipitation("PRECIPITATION"),
+    Wind("WIND"),
+    Tides("TIDES"),
+    Conditions("CONDITIONS"),
+}
+
+private val TableFont = FontFamily.SansSerif
+private val HeaderStyle = TextStyle(
+    fontFamily = TableFont,
+    fontWeight = FontWeight.Normal,
+    fontSize = 11.sp,
+    color = Color(0xFFB0BEC5),
+    textAlign = TextAlign.Center,
+)
+private val TimeCellStyle = TextStyle(
+    fontFamily = TableFont,
+    fontWeight = FontWeight.Normal,
+    fontSize = 11.sp,
+    color = Color(0xFF212121),
+    textAlign = TextAlign.Center,
+    lineHeight = 13.sp,
+)
+private val TimeColumnBg = Color(0xFFECEFF1)
+private val TimeColumnBgAlt = Color(0xFFDEE2E5)
+private val RowBgEven = Color(0xFF263238)
+private val RowBgOdd = Color(0xFF1E2A30)
+private val HeaderBg = Color(0xFF263238)
+private val TimeColWidth = 62.dp
+private val HeaderHeight = 32.dp
+private val RowHeight = 36.dp
+
+/** Dew point / cool metrics — blue like the original app. */
+private val DewPointBlue = Color(0xFF42A5F5)
+private val PopBlue = Color(0xFF64B5F6)
+private val TideTeal = Color(0xFF4DD0E1)
+private val WindWhite = Color(0xFFECEFF1)
+private val ConditionsWhite = Color(0xFFF5F5F5)
+
+@Composable
+fun HourlyScreen(
+    hourly: List<HourlyRow>,
+    tideInfo: TideInfo? = null,
+) {
+    val tabs = HourlyTab.entries
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
+    val tabModels = remember(hourly) { buildTabModels(hourly) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        ScrollableTabRow(
+            selectedTabIndex = pagerState.currentPage,
+            containerColor = PrimaryBlue,
+            contentColor = Color.White,
+            edgePadding = 0.dp,
+            indicator = { tabPositions ->
+                val page = pagerState.currentPage
+                if (page in tabPositions.indices) {
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[page]),
+                        color = Color.White,
+                        height = 2.dp,
+                    )
+                }
+            },
+            divider = {},
+        ) {
+            tabs.forEachIndexed { index, t ->
+                Tab(
+                    selected = pagerState.currentPage == index,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                    modifier = Modifier.height(40.dp),
+                    text = {
+                        Text(
+                            text = t.title,
+                            fontFamily = TableFont,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                        )
+                    },
+                )
+            }
+        }
+
+        if (hourly.isEmpty() || tabModels.isEmpty()) {
+            Text(
+                "Hourly data unavailable for this location.",
+                color = Color(0xFFB0BEC5),
+                fontFamily = TableFont,
+                modifier = Modifier.padding(24.dp),
+            )
+            return
+        }
+
+        if (pagerState.currentPage == HourlyTab.Tides.ordinal) {
+            TideStationBar(tideInfo)
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 0,
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                snapPositionalThreshold = 0.25f,
+            ),
+            key = { tabs[it].name },
+        ) { page ->
+            val model = tabModels[page]
+            HourlyTable(
+                headers = model.headers,
+                rows = model.rows,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TideStationBar(tideInfo: TideInfo?) {
+    val text = when {
+        tideInfo == null -> "Tide: station lookup unavailable"
+        !tideInfo.unavailableReason.isNullOrBlank() && tideInfo.stationName.isBlank() ->
+            "Tide: ${tideInfo.unavailableReason}"
+        !tideInfo.unavailableReason.isNullOrBlank() ->
+            "Tide: ${tideInfo.unavailableReason}"
+        else -> "Station: ${tideInfo.stationName} · ${"%.0f".format(tideInfo.distanceMiles)} mi · MLLW ft"
+    }
+    Text(
+        text = text,
+        color = Color(0xFFB0BEC5),
+        fontSize = 11.sp,
+        fontFamily = TableFont,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1E2A30))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Immutable
+private data class ColoredCell(
+    val text: String,
+    val color: Color,
+)
+
+@Immutable
+private data class TabModel(
+    val headers: List<String>,
+    val rows: List<HourlyTableRow>,
+)
+
+@Immutable
+private data class HourlyTableRow(
+    val time: String,
+    val cells: List<ColoredCell>,
+)
+
+/**
+ * Temperature / feels-like heat scale matching the original NOAA app screenshot:
+ * cool greens → yellow-greens → yellow → orange as it warms.
+ */
+private fun temperatureColor(tempF: Int?): Color {
+    if (tempF == null) return Color.White
+    val t = tempF.toFloat()
+    // Key stops (F → RGB) sampled from classic NWS-style hourly coloring
+    val stops = listOf(
+        20f to Color(0xFF26C6DA),  // cold cyan
+        32f to Color(0xFF66BB6A),  // cool green
+        42f to Color(0xFF81C784),  // soft green
+        50f to Color(0xFFAED581),  // yellow-green
+        55f to Color(0xFFDCE775),  // lime
+        62f to Color(0xFFFFEE58),  // yellow
+        70f to Color(0xFFFFCA28),  // amber
+        78f to Color(0xFFFFA726),  // orange
+        88f to Color(0xFFFF7043),  // deep orange
+        98f to Color(0xFFEF5350),  // hot red
+    )
+    if (t <= stops.first().first) return stops.first().second
+    if (t >= stops.last().first) return stops.last().second
+    for (i in 0 until stops.lastIndex) {
+        val (t0, c0) = stops[i]
+        val (t1, c1) = stops[i + 1]
+        if (t in t0..t1) {
+            val f = (t - t0) / (t1 - t0)
+            return lerpColor(c0, c1, f)
+        }
+    }
+    return Color.White
+}
+
+private fun lerpColor(a: Color, b: Color, t: Float): Color {
+    val f = t.coerceIn(0f, 1f)
+    return Color(
+        red = a.red + (b.red - a.red) * f,
+        green = a.green + (b.green - a.green) * f,
+        blue = a.blue + (b.blue - a.blue) * f,
+        alpha = 1f,
+    )
+}
+
+private fun popColor(pop: Int?): Color {
+    if (pop == null) return Color.White
+    // Stronger blue as chance rises
+    val f = (pop / 100f).coerceIn(0f, 1f)
+    return lerpColor(Color(0xFF90CAF9), Color(0xFF1565C0), f)
+}
+
+private fun buildTabModels(hourly: List<HourlyRow>): List<TabModel> {
+    if (hourly.isEmpty()) return emptyList()
+    val times = hourly.map { formatTimeLabel(it) }
+    return listOf(
+        TabModel(
+            headers = listOf("Temperature", "Feels Like", "Dew Point"),
+            rows = hourly.mapIndexed { i, row ->
+                HourlyTableRow(
+                    time = times[i],
+                    cells = listOf(
+                        ColoredCell(
+                            row.temperatureF?.let { "$it° F" }.orEmpty(),
+                            temperatureColor(row.temperatureF),
+                        ),
+                        ColoredCell(
+                            row.feelsLikeF?.let { "$it° F" }.orEmpty(),
+                            temperatureColor(row.feelsLikeF),
+                        ),
+                        ColoredCell(
+                            row.dewPointF?.let { "$it° F" }.orEmpty(),
+                            DewPointBlue,
+                        ),
+                    ),
+                )
+            },
+        ),
+        TabModel(
+            headers = listOf("Chance", "Amount", "Cloud Cover", "Humidity"),
+            rows = hourly.mapIndexed { i, row ->
+                HourlyTableRow(
+                    time = times[i],
+                    cells = listOf(
+                        ColoredCell(row.popPct?.let { "$it%" }.orEmpty(), popColor(row.popPct)),
+                        ColoredCell(row.precipIn.orEmpty(), PopBlue),
+                        ColoredCell(
+                            row.cloudCoverPct?.let { "$it%" }.orEmpty(),
+                            Color(0xFFB0BEC5),
+                        ),
+                        ColoredCell(
+                            row.humidityPct?.let { "$it%" }.orEmpty(),
+                            Color(0xFF80CBC4),
+                        ),
+                    ),
+                )
+            },
+        ),
+        TabModel(
+            headers = listOf("Speed", "Gust", "Direction"),
+            rows = hourly.mapIndexed { i, row ->
+                HourlyTableRow(
+                    time = times[i],
+                    cells = listOf(
+                        ColoredCell(row.windSpeedMph?.let { "$it mph" }.orEmpty(), WindWhite),
+                        ColoredCell(row.windGustMph?.let { "$it mph" }.orEmpty(), Color(0xFFFFCC80)),
+                        ColoredCell(row.windDirection.orEmpty(), Color(0xFF80DEEA)),
+                    ),
+                )
+            },
+        ),
+        TabModel(
+            headers = listOf("Height", "Trend"),
+            rows = hourly.mapIndexed { i, row ->
+                val trendColor = when (row.tideTrend) {
+                    "Rising" -> Color(0xFF81C784)
+                    "Falling" -> Color(0xFFE57373)
+                    else -> TideTeal
+                }
+                HourlyTableRow(
+                    time = times[i],
+                    cells = listOf(
+                        ColoredCell(
+                            row.tideFt?.let { String.format(Locale.US, "%.2f ft", it) }.orEmpty(),
+                            TideTeal,
+                        ),
+                        ColoredCell(row.tideTrend.orEmpty(), trendColor),
+                    ),
+                )
+            },
+        ),
+        TabModel(
+            headers = listOf("Conditions"),
+            rows = hourly.mapIndexed { i, row ->
+                HourlyTableRow(
+                    time = times[i],
+                    cells = listOf(ColoredCell(row.weather, ConditionsWhite)),
+                )
+            },
+        ),
+    )
+}
+
+@Composable
+private fun HourlyTable(
+    headers: List<String>,
+    rows: List<HourlyTableRow>,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(HeaderBg)
+                .height(HeaderHeight),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .width(TimeColWidth)
+                    .fillMaxHeight()
+                    .background(HeaderBg)
+                    .border(width = 0.5.dp, color = Color(0xFF37474F)),
+            )
+            headers.forEach { h ->
+                Text(
+                    text = h,
+                    style = HeaderStyle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 2.dp),
+                )
+            }
+        }
+        HorizontalDivider(color = Color(0xFF37474F), thickness = 1.dp)
+
+        LazyColumn(Modifier.fillMaxSize()) {
+            itemsIndexed(
+                items = rows,
+                key = { index, _ -> index },
+                contentType = { _, _ -> "hourly_row" },
+            ) { index, row ->
+                val dataBg = if (index % 2 == 0) RowBgEven else RowBgOdd
+                val timeBg = if (index % 2 == 0) TimeColumnBg else TimeColumnBgAlt
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(RowHeight)
+                        .background(dataBg),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .width(TimeColWidth)
+                            .fillMaxHeight()
+                            .background(timeBg)
+                            .border(width = 0.5.dp, color = Color(0xFFCFD8DC)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = row.time,
+                            style = TimeCellStyle,
+                            modifier = Modifier.padding(horizontal = 2.dp),
+                        )
+                    }
+                    row.cells.forEach { cell ->
+                        Text(
+                            text = cell.text,
+                            fontFamily = TableFont,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = cell.color,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 2.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatTimeLabel(row: HourlyRow): String {
+    val epoch = row.epochSec
+    if (epoch != null) {
+        val date = Date(epoch * 1000L)
+        val dayFmt = SimpleDateFormat("EEE M/d", Locale.US)
+        val timeFmt = SimpleDateFormat("h a", Locale.US)
+        dayFmt.timeZone = TimeZone.getDefault()
+        timeFmt.timeZone = TimeZone.getDefault()
+        return "${dayFmt.format(date)}\n${timeFmt.format(date)}"
+    }
+    val head = row.periodLabel
+        .removePrefix("This ")
+        .take(6)
+    val time = row.timeLabel
+        .replace("am", "AM", ignoreCase = true)
+        .replace("pm", "PM", ignoreCase = true)
+    return "$head\n$time"
+}

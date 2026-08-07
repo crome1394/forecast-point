@@ -1,0 +1,52 @@
+Forecast Point
+==============
+
+Copyright (c) 2026 Forecast Point contributors
+Licensed under the MIT License (see LICENSE).
+
+Third-party data and libraries
+------------------------------
+
+### National Weather Service / NOAA
+Forecast, observation, alert, and related weather data are provided by the
+U.S. National Weather Service and NOAA through publicly documented services
+(e.g. weather.gov MapClick, api.weather.gov, radar.weather.gov, CO-OPS tides).
+
+This application is not affiliated with, endorsed by, or sponsored by NOAA,
+the National Weather Service, or the U.S. Department of Commerce.
+
+Please use government APIs responsibly (reasonable User-Agent, caching, and
+rate of requests).
+
+### OpenStreetMap
+Map data © OpenStreetMap contributors, available under the Open Database
+License (ODbL). See https://www.openstreetmap.org/copyright
+
+Geocoding via the Nominatim service: https://nominatim.org/
+Please respect Nominatim usage policy when self-hosting or heavy use.
+
+### CARTO basemap tiles
+Map basemap tiles may be loaded from CARTO basemap CDN (light style) as used
+by osmdroid tile configuration. © OpenStreetMap contributors, © CARTO.
+
+### osmdroid
+https://github.com/osmdroid/osmdroid
+Licensed under the Apache License, Version 2.0.
+
+### AndroidX / Jetpack / Kotlin / OkHttp / Coil
+These libraries are used under their respective open-source licenses
+(typically Apache 2.0). See each project for details.
+
+### NWS forecast icons
+Weather condition icons are derived from the National Weather Service forecast
+icon set used on weather.gov (bundled for offline/reliable display).
+
+Inspiration
+-----------
+
+User experience was inspired by the commercial Android application
+“NOAA Weather & Tides” by Pandamonium Software
+(https://play.google.com/store/apps/details?id=pandamonium.noaaweather).
+
+Forecast Point is an independent clean-room implementation. It does not
+include that product’s source code, proprietary assets, or branding.

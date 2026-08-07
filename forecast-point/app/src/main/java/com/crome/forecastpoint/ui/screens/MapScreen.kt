@@ -1,0 +1,584 @@
+package com.crome.forecastpoint.ui.screens
+
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import com.crome.forecastpoint.data.GeocodeResult
+import com.crome.forecastpoint.ui.theme.OnSurfaceMuted
+import com.crome.forecastpoint.ui.theme.PrimaryBlue
+import com.crome.forecastpoint.ui.theme.SurfaceDark
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
+import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.ScaleBarOverlay
+
+/** Clean light basemap — fewer visual elements, readable place names. */
+private val CartoLightTiles: OnlineTileSourceBase = object : XYTileSource(
+    "CartoPositron",
+    1,
+    18,
+    256,
+    ".png",
+    arrayOf(
+        "https://a.basemaps.cartocdn.com/light_all/",
+        "https://b.basemaps.cartocdn.com/light_all/",
+        "https://c.basemaps.cartocdn.com/light_all/",
+        "https://d.basemaps.cartocdn.com/light_all/",
+    ),
+    "© OpenStreetMap © CARTO",
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String {
+        return baseUrl +
+            MapTileIndex.getZoom(pMapTileIndex) + "/" +
+            MapTileIndex.getX(pMapTileIndex) + "/" +
+            MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
+    }
+}
+
+/**
+ * Map picker:
+ * - Tap places a pin; a city-name chip appears above it — tap the chip to accept.
+ * - Floating search FAB (bottom-right) shows/hides the search field.
+ * - One-finger pan; auto GPS center on open.
+ */
+@Composable
+fun MapScreen(
+    initialLat: Double = 39.8283,
+    initialLon: Double = -98.5795,
+    initialZoom: Double = 4.0,
+    searchAtBottom: Boolean = false,
+    onSearch: suspend (String) -> List<GeocodeResult>,
+    onReverseGeocode: suspend (Double, Double) -> GeocodeResult,
+    onConfirmLocation: (GeocodeResult) -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf("Tap the map to drop a pin, then tap the name to accept") }
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<GeocodeResult>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+    var locating by remember { mutableStateOf(false) }
+    var searchVisible by remember { mutableStateOf(false) }
+    var resolving by remember { mutableStateOf(false) }
+    /** Pending pin — user must tap the name chip to accept. */
+    var pending by remember { mutableStateOf<GeocodeResult?>(null) }
+
+    val mapView = remember {
+        createMapView(context, initialLat, initialLon, initialZoom)
+    }
+    val selectionMarker = remember {
+        Marker(mapView).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            title = "Selected"
+        }
+    }
+
+    fun flyTo(lat: Double, lon: Double, zoom: Double = 11.0) {
+        mapView.controller.animateTo(GeoPoint(lat, lon), zoom, 600L)
+    }
+
+    fun placeMarker(lat: Double, lon: Double) {
+        mapView.overlays.removeAll { it is Marker }
+        selectionMarker.position = GeoPoint(lat, lon)
+        mapView.overlays.add(selectionMarker)
+        mapView.invalidate()
+    }
+
+    fun selectPoint(lat: Double, lon: Double, known: GeocodeResult? = null) {
+        placeMarker(lat, lon)
+        flyTo(lat, lon, mapView.zoomLevelDouble.coerceAtLeast(10.0))
+        if (known != null) {
+            pending = known
+            status = "Tap “${known.name}” above the pin to use this location"
+            return
+        }
+        resolving = true
+        status = "Looking up place name…"
+        scope.launch {
+            val place = runCatching { onReverseGeocode(lat, lon) }.getOrElse {
+                GeocodeResult(
+                    name = String.format("%.3f, %.3f", lat, lon),
+                    displayName = "Selected point",
+                    latitude = lat,
+                    longitude = lon,
+                )
+            }
+            pending = place
+            resolving = false
+            status = "Tap “${place.name}” above the pin to use this location"
+        }
+    }
+
+    /** Center map on GPS only — no pin bubble until the user taps a place. */
+    fun centerOnMyLocation() {
+        locating = true
+        pending = null
+        mapView.overlays.removeAll { it is Marker }
+        mapView.invalidate()
+        val loc = lastKnownLocation(context)
+        if (loc != null) {
+            flyTo(loc.latitude, loc.longitude, 11.0)
+            status = "Centered on your location — tap the map to drop a pin"
+            locating = false
+        } else {
+            status = "Location unavailable — enable GPS or pick on map"
+            locating = false
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        if (grants.values.any { it }) {
+            centerOnMyLocation()
+        } else {
+            status = "Location permission denied — search or tap the map"
+            locating = false
+            // Center on current forecast city if we have one, still no bubble
+            if (initialZoom >= 6.0) {
+                flyTo(initialLat, initialLon, initialZoom)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        // Never show accept bubble on open — only after user picks a point
+        pending = null
+        val fine = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            centerOnMyLocation()
+        } else {
+            if (initialZoom >= 6.0) {
+                flyTo(initialLat, initialLon, initialZoom)
+                status = "Tap the map to drop a pin, then tap the name to accept"
+            }
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
+            )
+        }
+    }
+
+    DisposableEffect(Unit) {
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
+    }
+
+    val searchPanel: @Composable () -> Unit = {
+        AnimatedVisibility(
+            visible = searchVisible,
+            enter = fadeIn() + slideInVertically { if (searchAtBottom) it / 2 else -it / 2 },
+            exit = fadeOut() + slideOutVertically { if (searchAtBottom) it / 2 else -it / 2 },
+        ) {
+            MapSearchBar(
+                query = query,
+                onQueryChange = { q ->
+                    query = q
+                    searchJob?.cancel()
+                    if (q.isBlank()) {
+                        results = emptyList()
+                        searching = false
+                    } else {
+                        searchJob = scope.launch {
+                            delay(350)
+                            searching = true
+                            results = runCatching { onSearch(q) }.getOrDefault(emptyList())
+                            searching = false
+                        }
+                    }
+                },
+                results = results,
+                searching = searching,
+                locating = locating,
+                onResultClick = { r ->
+                    query = r.name
+                    results = emptyList()
+                    searchVisible = false
+                    // Pin + name chip; wait for confirm
+                    selectPoint(r.latitude, r.longitude, known = r)
+                },
+                onMyLocationClick = {
+                    val fine = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    val coarse = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (fine || coarse) centerOnMyLocation()
+                    else {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
+                    }
+                },
+                onClose = { searchVisible = false },
+            )
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color(0xFF1B262C))) {
+        Column(Modifier.fillMaxSize()) {
+            if (!searchAtBottom) {
+                searchPanel()
+                StatusLine(status)
+            }
+
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = {
+                        mapView.setMultiTouchControls(true)
+                        mapView.isHorizontalMapRepetitionEnabled = false
+                        mapView.isVerticalMapRepetitionEnabled = false
+                        mapView.setFlingEnabled(true)
+
+                        val receiver = object : MapEventsReceiver {
+                            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                                if (p == null) return false
+                                // Drop pin only — accept via name chip
+                                selectPoint(p.latitude, p.longitude)
+                                return true
+                            }
+
+                            override fun longPressHelper(p: GeoPoint?): Boolean = false
+                        }
+                        mapView.overlays.add(0, MapEventsOverlay(receiver))
+                        mapView
+                    },
+                    update = { /* keep instance */ },
+                )
+
+                // City-name chip floating above the pin area (center of map)
+                pending?.let { place ->
+                    Column(
+                        Modifier
+                            .align(Alignment.Center)
+                            .padding(bottom = 48.dp)
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        // Rectangle with city name — tap to accept
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = PrimaryBlue,
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .clickable {
+                                    status = "Loading weather for ${place.name}…"
+                                    onConfirmLocation(place)
+                                },
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Place,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = place.name,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        textAlign = TextAlign.Start,
+                                    )
+                                    Text(
+                                        text = "Tap to use this location",
+                                        color = Color(0xFFBBDEFB),
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Accept",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        // Small triangle pointer toward pin
+                        Box(
+                            Modifier
+                                .padding(top = 0.dp)
+                                .size(width = 14.dp, height = 8.dp)
+                                .background(PrimaryBlue, RoundedCornerShape(1.dp)),
+                        )
+                    }
+                }
+
+                if (resolving) {
+                    CircularProgressIndicator(
+                        Modifier.align(Alignment.Center),
+                        color = PrimaryBlue,
+                    )
+                }
+
+                // Floating search toggle — bottom right
+                FloatingActionButton(
+                    onClick = { searchVisible = !searchVisible },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    containerColor = PrimaryBlue,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                ) {
+                    Icon(
+                        imageVector = if (searchVisible) Icons.Filled.Close else Icons.Filled.Search,
+                        contentDescription = if (searchVisible) "Hide search" else "Show search",
+                    )
+                }
+            }
+
+            if (searchAtBottom) {
+                StatusLine(status)
+                searchPanel()
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusLine(status: String) {
+    Text(
+        text = status,
+        color = OnSurfaceMuted,
+        fontSize = 12.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PrimaryBlue.copy(alpha = 0.2f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun MapSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    results: List<GeocodeResult>,
+    searching: Boolean,
+    locating: Boolean,
+    onResultClick: (GeocodeResult) -> Unit,
+    onMyLocationClick: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceDark)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                placeholder = { Text("Search city…", color = OnSurfaceMuted) },
+                leadingIcon = {
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = OnSurfaceMuted)
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = PrimaryBlue,
+                    unfocusedBorderColor = Color(0xFF546E7A),
+                    cursorColor = PrimaryBlue,
+                ),
+                shape = RoundedCornerShape(10.dp),
+            )
+            IconButton(onClick = onMyLocationClick) {
+                if (locating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(22.dp).padding(2.dp),
+                        strokeWidth = 2.dp,
+                        color = PrimaryBlue,
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.MyLocation,
+                        contentDescription = "My location",
+                        tint = PrimaryBlue,
+                    )
+                }
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = "Hide search", tint = OnSurfaceMuted)
+            }
+        }
+
+        if (searching) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(20.dp),
+                strokeWidth = 2.dp,
+                color = PrimaryBlue,
+            )
+        }
+
+        if (results.isNotEmpty()) {
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 180.dp)
+                    .padding(top = 4.dp),
+            ) {
+                items(results, key = { "${it.latitude},${it.longitude},${it.name}" }) { r ->
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onResultClick(r) }
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                    ) {
+                        Text(r.name, color = Color.White, fontSize = 15.sp)
+                        Text(r.displayName, color = OnSurfaceMuted, fontSize = 11.sp, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun createMapView(
+    context: Context,
+    lat: Double,
+    lon: Double,
+    zoom: Double,
+): MapView {
+    Configuration.getInstance().userAgentValue = context.packageName
+    Configuration.getInstance().osmdroidBasePath = context.cacheDir
+    Configuration.getInstance().osmdroidTileCache = context.cacheDir.resolve("osmdroid")
+
+    return MapView(context).apply {
+        setTileSource(CartoLightTiles)
+        setMultiTouchControls(true)
+        setFlingEnabled(true)
+        isTilesScaledToDpi = true
+        zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
+        controller.setZoom(zoom)
+        controller.setCenter(GeoPoint(lat, lon))
+        minZoomLevel = 3.0
+        maxZoomLevel = 18.0
+        val scale = ScaleBarOverlay(this)
+        scale.setAlignBottom(true)
+        scale.setAlignRight(false)
+        overlays.add(scale)
+    }
+}
+
+private fun lastKnownLocation(context: Context): Location? {
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    val providers = listOf(
+        LocationManager.GPS_PROVIDER,
+        LocationManager.NETWORK_PROVIDER,
+        LocationManager.PASSIVE_PROVIDER,
+    )
+    return providers.mapNotNull { p ->
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                lm.getLastKnownLocation(p)
+            } else {
+                null
+            }
+        } catch (_: SecurityException) {
+            null
+        }
+    }.maxByOrNull { it.time }
+}

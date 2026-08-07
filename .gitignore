@@ -1,0 +1,39 @@
+# Android / Gradle
+**/.gradle/
+**/build/
+**/local.properties
+**/*.iml
+**/.idea/
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+captures/
+.externalNativeBuild/
+.cxx/
+output.json
+
+# Kotlin
+.kotlin/
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+.vscode/
+*.log
+
+# Secrets
+**/keystore.properties
+**/*.jks
+**/*.keystore
+.env
+.env.*
+
+# osmdroid / app runtime caches (if ever checked in by mistake)
+**/osmdroid/
+
+# Optional large local artifacts
+NOAA-Forecast-debug.apk
+*.hprof
