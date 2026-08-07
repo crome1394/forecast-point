@@ -116,7 +116,7 @@ See [NOTICE](NOTICE) for full attribution.
 
 Development screenshots (for reference) live under [`Screenshots/`](Screenshots/).
 
-## Build
+## Build from source
 
 Requirements:
 
@@ -129,17 +129,20 @@ cd forecast-point
 ./gradlew :app:assembleDebug
 ```
 
-Debug APK:
+Gradle writes:
 
 ```text
 forecast-point/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Install on a device/emulator:
+Rename for sharing (optional but recommended):
 
 ```bash
-adb install -r forecast-point/app/build/outputs/apk/debug/app-debug.apk
+cp app/build/outputs/apk/debug/app-debug.apk ../dist/ForecastPoint-1.0.0.apk
+adb install -r ../dist/ForecastPoint-1.0.0.apk
 ```
+
+> **Note:** This build is a *debug* APK (fine for personal/sideload use). A signed *release* build is better for wider distribution; that needs a keystore you keep private.
 
 ## Data sources
 
