@@ -27,6 +27,7 @@ class PreferencesRepository(private val context: Context) {
     private val keyTitleBarBottom = booleanPreferencesKey("title_bar_bottom")
     private val keyWidgetShowHighLow = booleanPreferencesKey("widget_show_high_low")
     private val keyMapSearchBottom = booleanPreferencesKey("map_search_at_bottom")
+    private val keyExpandCurrentConditions = booleanPreferencesKey("expand_current_conditions")
 
     val autoUpdateEnabled: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoUpdate] ?: true }
@@ -51,6 +52,13 @@ class PreferencesRepository(private val context: Context) {
     /** When true, map city search field is docked at the bottom. */
     val mapSearchAtBottom: Flow<Boolean> =
         context.dataStore.data.map { it[keyMapSearchBottom] ?: false }
+
+    /**
+     * When true, Current Conditions starts expanded on the main screen.
+     * Active hazards still force-expand regardless of this setting.
+     */
+    val expandCurrentConditions: Flow<Boolean> =
+        context.dataStore.data.map { it[keyExpandCurrentConditions] ?: false }
 
     val favorites: Flow<List<SavedLocation>> =
         context.dataStore.data.map { prefs ->
@@ -92,6 +100,10 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setMapSearchAtBottom(bottom: Boolean) {
         context.dataStore.edit { it[keyMapSearchBottom] = bottom }
+    }
+
+    suspend fun setExpandCurrentConditions(expand: Boolean) {
+        context.dataStore.edit { it[keyExpandCurrentConditions] = expand }
     }
 
     suspend fun setActiveLocationId(id: String?) {

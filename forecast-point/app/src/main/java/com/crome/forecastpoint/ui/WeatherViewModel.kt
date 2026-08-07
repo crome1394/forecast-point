@@ -41,6 +41,8 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     val titleBarAtBottom = prefs.titleBarAtBottom.stateIn(viewModelScope, share, false)
     val widgetShowHighLow = prefs.widgetShowHighLow.stateIn(viewModelScope, share, false)
     val mapSearchAtBottom = prefs.mapSearchAtBottom.stateIn(viewModelScope, share, false)
+    val expandCurrentConditions =
+        prefs.expandCurrentConditions.stateIn(viewModelScope, share, false)
 
     private val _searchResults = MutableStateFlow<List<GeocodeResult>>(emptyList())
     val searchResults: StateFlow<List<GeocodeResult>> = _searchResults.asStateFlow()
@@ -182,6 +184,12 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     fun setMapSearchAtBottom(bottom: Boolean) {
         viewModelScope.launch {
             prefs.setMapSearchAtBottom(bottom)
+        }
+    }
+
+    fun setExpandCurrentConditions(expand: Boolean) {
+        viewModelScope.launch {
+            prefs.setExpandCurrentConditions(expand)
         }
     }
 

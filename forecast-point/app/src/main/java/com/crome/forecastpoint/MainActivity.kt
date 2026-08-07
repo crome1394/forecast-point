@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
                 val titleBarAtBottom by viewModel.titleBarAtBottom.collectAsState()
                 val widgetShowHighLow by viewModel.widgetShowHighLow.collectAsState()
                 val mapSearchAtBottom by viewModel.mapSearchAtBottom.collectAsState()
+                val expandCurrentConditions by viewModel.expandCurrentConditions.collectAsState()
 
                 var screen by remember { mutableStateOf(AppScreen.Forecast) }
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -389,10 +390,12 @@ class MainActivity : ComponentActivity() {
                                     loading = loading,
                                     error = error,
                                     isFavorite = favorites.any { it.id == activeId },
+                                    expandCurrentConditions = expandCurrentConditions,
                                     onToggleFavorite = { },
                                     onOpenHourly = { screen = AppScreen.Hourly },
                                     onDayClick = { screen = AppScreen.Hourly },
                                     onAddCity = { openAddCity() },
+                                    onOpenMap = { openMap() },
                                     onOpenRadar = {
                                         val url = snapshot?.let {
                                             RadarUrl.forCoordinates(it.latitude, it.longitude)
@@ -435,11 +438,15 @@ class MainActivity : ComponentActivity() {
                                     titleBarAtBottom = titleBarAtBottom,
                                     widgetShowHighLow = widgetShowHighLow,
                                     mapSearchAtBottom = mapSearchAtBottom,
+                                    expandCurrentConditions = expandCurrentConditions,
                                     onAutoUpdateChange = { viewModel.setAutoUpdate(it) },
                                     onIntervalChange = { viewModel.setIntervalMinutes(it) },
                                     onTitleBarAtBottomChange = { viewModel.setTitleBarAtBottom(it) },
                                     onWidgetShowHighLowChange = { viewModel.setWidgetShowHighLow(it) },
                                     onMapSearchAtBottomChange = { viewModel.setMapSearchAtBottom(it) },
+                                    onExpandCurrentConditionsChange = {
+                                        viewModel.setExpandCurrentConditions(it)
+                                    },
                                     onManualRefresh = {
                                         viewModel.manualRefresh()
                                         screen = AppScreen.Forecast

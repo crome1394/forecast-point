@@ -7,6 +7,15 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Map search (spotlight FAB): search bar now reliably appears and defaults to the **top** of the map; use Settings → “Map search at bottom” only if you prefer bottom placement
+- First-run empty state: **Open Map** shortcut when no city is selected yet
+
+### Added
+
+- Settings → **Expand Current Conditions**: choose whether Current Conditions details start expanded or collapsed when you open the app (active hazards still force-expand)
+
 ### Documentation
 
 - README: GitHub Release download section and APK naming guidance

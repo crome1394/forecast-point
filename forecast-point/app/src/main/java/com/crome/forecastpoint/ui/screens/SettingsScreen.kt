@@ -43,11 +43,13 @@ fun SettingsScreen(
     titleBarAtBottom: Boolean,
     widgetShowHighLow: Boolean,
     mapSearchAtBottom: Boolean,
+    expandCurrentConditions: Boolean,
     onAutoUpdateChange: (Boolean) -> Unit,
     onIntervalChange: (Int) -> Unit,
     onTitleBarAtBottomChange: (Boolean) -> Unit,
     onWidgetShowHighLowChange: (Boolean) -> Unit,
     onMapSearchAtBottomChange: (Boolean) -> Unit,
+    onExpandCurrentConditionsChange: (Boolean) -> Unit,
     onManualRefresh: () -> Unit,
 ) {
     Column(
@@ -85,6 +87,60 @@ fun SettingsScreen(
             )
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(SurfaceDark)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Expand Current Conditions", color = Color.White, fontSize = 16.sp)
+                Text(
+                    if (expandCurrentConditions) {
+                        "Details start open when you open the app"
+                    } else {
+                        "Details start collapsed (tap the row to expand)"
+                    },
+                    color = OnSurfaceMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            Switch(
+                checked = expandCurrentConditions,
+                onCheckedChange = onExpandCurrentConditionsChange,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(SurfaceDark)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Map search at bottom", color = Color.White, fontSize = 16.sp)
+                Text(
+                    if (mapSearchAtBottom) {
+                        "Search bar appears at the bottom of the map"
+                    } else {
+                        "Search bar appears at the top of the map (default)"
+                    },
+                    color = OnSurfaceMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            Switch(
+                checked = mapSearchAtBottom,
+                onCheckedChange = onMapSearchAtBottomChange,
+            )
+        }
+
         Spacer(Modifier.height(24.dp))
         Text("Widget", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(12.dp))
@@ -111,33 +167,6 @@ fun SettingsScreen(
             Switch(
                 checked = widgetShowHighLow,
                 onCheckedChange = onWidgetShowHighLowChange,
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(SurfaceDark)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Map search at bottom", color = Color.White, fontSize = 16.sp)
-                Text(
-                    if (mapSearchAtBottom) {
-                        "City search field is below the map"
-                    } else {
-                        "City search field is above the map"
-                    },
-                    color = OnSurfaceMuted,
-                    fontSize = 13.sp,
-                )
-            }
-            Switch(
-                checked = mapSearchAtBottom,
-                onCheckedChange = onMapSearchAtBottomChange,
             )
         }
 

@@ -66,11 +66,13 @@ fun ForecastScreen(
     loading: Boolean,
     error: String?,
     isFavorite: Boolean,
+    expandCurrentConditions: Boolean = false,
     onToggleFavorite: () -> Unit,
     onOpenHourly: () -> Unit,
     onDayClick: (DayForecast) -> Unit,
     onAddCity: () -> Unit = {},
     onOpenRadar: () -> Unit = {},
+    onOpenMap: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -93,7 +95,11 @@ fun ForecastScreen(
                     )
                 }
                 item(key = "current") {
-                    CurrentConditionsCard(snapshot.current, snapshot)
+                    CurrentConditionsCard(
+                        current = snapshot.current,
+                        snapshot = snapshot,
+                        expandByDefault = expandCurrentConditions,
+                    )
                 }
                 item(key = "radar") {
                     RadarLinkButton(onClick = onOpenRadar)
@@ -121,7 +127,7 @@ fun ForecastScreen(
                     Column(Modifier.padding(24.dp)) {
                         Text(
                             text = error
-                                ?: "No city selected yet.\n\nUse Add City in the menu, search, or Current Location to get started.",
+                                ?: "No city selected yet.\n\nAdd a city by search, map, or current location.",
                             color = OnSurfaceMuted,
                             fontSize = 15.sp,
                         )
@@ -133,6 +139,15 @@ fun ForecastScreen(
                             fontSize = 16.sp,
                             modifier = Modifier
                                 .clickable(onClick = onAddCity)
+                                .padding(vertical = 8.dp),
+                        )
+                        Text(
+                            text = "Open Map",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                            modifier = Modifier
+                                .clickable(onClick = onOpenMap)
                                 .padding(vertical = 8.dp),
                         )
                     }
@@ -238,10 +253,17 @@ private fun LocationHeader(
 }
 
 @Composable
-private fun CurrentConditionsCard(current: CurrentConditions, snapshot: WeatherSnapshot) {
+private fun CurrentConditionsCard(
+    current: CurrentConditions,
+    snapshot: WeatherSnapshot,
+    expandByDefault: Boolean = false,
+) {
     val hazards = snapshot.hazards
-    // Auto-expand when there are active hazards so warnings aren't hidden
-    var expanded by remember(hazards.size) { mutableStateOf(hazards.isNotEmpty()) }
+    // Hazards always start expanded; otherwise honor Settings preference
+    val initialExpanded = hazards.isNotEmpty() || expandByDefault
+    var expanded by remember(hazards.size, expandByDefault) {
+        mutableStateOf(initialExpanded)
+    }
     val uriHandler = LocalUriHandler.current
 
     Card(
