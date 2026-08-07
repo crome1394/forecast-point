@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-07
+
 ### Fixed
 
 - Crash when loading a city after midnight: NWS returns both **Overnight** and the weekday (e.g. Friday) for the same date; duplicate list keys crashed Compose. Overnight/Tonight stay distinct labels and day cards use unique keys.
