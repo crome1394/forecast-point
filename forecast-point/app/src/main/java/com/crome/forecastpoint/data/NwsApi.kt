@@ -641,10 +641,16 @@ class NwsApi(
             .removeSuffix(" Night")
             .removeSuffix(" Afternoon")
             .removePrefix("This ")
-        if (base in setOf("Tonight", "Overnight", "Today", "This")) {
-            return formatWeekday(startIso) ?: base.take(3)
+        // Keep Tonight/Overnight as distinct labels. After midnight NWS often
+        // emits Overnight + Friday for the same calendar day — mapping both to
+        // "Fri" produced duplicate LazyColumn keys and crashed the UI.
+        return when {
+            base.equals("Tonight", ignoreCase = true) -> "Tonight"
+            base.equals("Overnight", ignoreCase = true) -> "Overnight"
+            base.equals("Today", ignoreCase = true) || base.equals("This", ignoreCase = true) ->
+                formatWeekday(startIso) ?: "Today"
+            else -> base.take(3)
         }
-        return base.take(3)
     }
 
     private fun formatWeekday(iso: String?): String? {

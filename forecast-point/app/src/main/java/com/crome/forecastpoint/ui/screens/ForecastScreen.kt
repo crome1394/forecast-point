@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -114,11 +114,11 @@ fun ForecastScreen(
                         )
                     }
                 }
-                items(
+                itemsIndexed(
                     items = snapshot.days,
-                    key = { it.dateLabel + it.dayName },
-                    contentType = { "day" },
-                ) { day ->
+                    key = { index, day -> "${index}|${day.dateLabel}|${day.dayName}" },
+                    contentType = { _, _ -> "day" },
+                ) { _, day ->
                     DayCard(day = day, onClick = { onDayClick(day); onOpenHourly() })
                 }
                 item(key = "bottom_pad") { Spacer(Modifier.height(24.dp)) }

@@ -9,6 +9,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Crash when loading a city after midnight: NWS returns both **Overnight** and the weekday (e.g. Friday) for the same date; duplicate list keys crashed Compose. Overnight/Tonight stay distinct labels and day cards use unique keys.
 - Map search (spotlight FAB): search bar now reliably appears and defaults to the **top** of the map; use Settings → “Map search at bottom” only if you prefer bottom placement
 - First-run empty state: **Open Map** shortcut when no city is selected yet
 
